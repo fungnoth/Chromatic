@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chromatic — Color Memory</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Fraunces:ital,wght@0,200;0,400;1,200&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0e0e0f;
+    --surface: #18181a;
+    --border: #2a2a2e;
+    --text: #e8e6e0;
+    --muted: #5a5860;
+    --accent: #c8b89a;
+    --good: #7ec98e;
+    --mid: #e8c97a;
+    --bad: #e87a7a;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none; z-index: 1000; opacity: 0.4;
+  }
+
+  #app { width: 100%; max-width: 520px; display: flex; flex-direction: column; align-items: center; }
+
+  /* ── HEADER ── */
+  .header {
+    width: 100%; display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 2.5rem;
+    opacity: 0; animation: fadeUp 0.6s ease forwards 0.1s;
+  }
+  .logo { font-family: 'Fraunces', serif; font-size: 1.4rem; font-weight: 200; letter-spacing: 0.02em; }
+  .logo em { font-style: italic; color: var(--accent); }
+  .header-right { display: flex; align-items: center; gap: 0.8rem; }
+  .round-badge { font-size: 0.65rem; letter-spacing: 0.12em; color: var(--muted); text-transform: uppercase; }
+  .round-badge span { color: var(--accent); }
+
+  /* Share button in header */
+  .share-btn {
+    background: transparent; border: 1px solid var(--border);
+    color: var(--muted); padding: 0.4rem 0.8rem;
+    font-family: 'DM Mono', monospace; font-size: 0.6rem;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    cursor: pointer; border-radius: 4px;
+    transition: all 0.15s ease; display: flex; align-items: center; gap: 0.4rem;
+  }
+  .share-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .share-btn.copied { border-color: var(--good); color: var(--good); }
+
+  /* ── SCREENS ── */
+  .screen { width: 100%; display: none; flex-direction: column; align-items: center; gap: 1.6rem; }
+  .screen.active { display: flex; }
+
+  /* ── START ── */
+  #start-screen { text-align: center; gap: 1.4rem; }
+  .tagline { font-family: 'Fraunces', serif; font-size: 2.6rem; font-weight: 200; line-height: 1.15; letter-spacing: -0.02em; }
+  .tagline em { font-style: italic; color: var(--accent); }
+  .description { font-size: 0.7rem; color: var(--muted); letter-spacing: 0.07em; line-height: 1.9; max-width: 340px; }
+  .delta-note { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.4rem; font-size: 0.66rem; color: var(--muted); line-height: 1.9; text-align: left; width: 100%; }
+  .delta-note strong { color: var(--accent); font-weight: 500; }
+
+  /* ── BUTTONS ── */
+  .btn { background: var(--accent); color: #1a1810; border: none; padding: 0.85rem 2.6rem; font-family: 'DM Mono', monospace; font-size: 0.7rem; letter-spacing: 0.14em; text-transform: uppercase; cursor: pointer; border-radius: 4px; font-weight: 500; transition: all 0.15s ease; }
+  .btn:hover { background: #d9ccb3; transform: translateY(-1px); }
+  .btn:active { transform: translateY(0); }
+  .btn.ghost { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+  .btn.ghost:hover { border-color: var(--accent); color: var(--accent); background: transparent; }
+  .btn.full { width: 100%; }
+  .btn-row { display: flex; gap: 0.8rem; flex-wrap: wrap; justify-content: center; }
+
+  /* ── MEMORISE ── */
+  .round-label { font-size: 0.64rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--muted); align-self: flex-start; }
+
+  .big-swatch { width: 100%; height: 260px; border-radius: 14px; position: relative; overflow: hidden; }
+  .big-swatch.hiding { background: var(--surface) !important; border: 1px solid var(--border); }
+  .swatch-inner-label { position: absolute; bottom: 1rem; right: 1rem; font-size: 0.6rem; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255,255,255,0.35); }
+  .hidden-msg { display: none; position: absolute; inset: 0; align-items: center; justify-content: center; font-size: 0.64rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+  .big-swatch.hiding .hidden-msg { display: flex; }
+  .big-swatch.hiding .swatch-inner-label { display: none; }
+
+  .countdown-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: 'Fraunces', serif; font-size: 5rem; font-weight: 200; color: rgba(255,255,255,0.7); pointer-events: none; opacity: 0; transition: opacity 0.2s; text-shadow: 0 2px 20px rgba(0,0,0,0.3); }
+
+  .timer-wrap { width: 100%; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .timer-bar { height: 100%; background: var(--accent); border-radius: 2px; width: 100%; }
+
+  /* ── GUESS ── */
+  .swatches-row { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
+  .mini-swatch { height: 110px; border-radius: 10px; position: relative; overflow: hidden; }
+  .mini-swatch .swatch-inner-label { font-size: 0.56rem; }
+  .mini-blank { height: 110px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; }
+  .mini-blank span { font-size: 0.6rem; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; }
+
+  /* ── PICKER ── */
+  .picker-card { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.2rem; display: flex; flex-direction: column; gap: 1.1rem; }
+  .picker-top { display: flex; align-items: center; gap: 1rem; }
+  .color-preview-box { width: 56px; height: 56px; border-radius: 8px; border: 2px solid var(--border); flex-shrink: 0; }
+  .hex-info { display: flex; flex-direction: column; gap: 0.25rem; }
+  .hex-val { font-size: 1.05rem; letter-spacing: 0.07em; }
+  .hsl-val { font-size: 0.6rem; color: var(--muted); letter-spacing: 0.08em; }
+  .picker-sub-label { font-size: 0.6rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.5rem; }
+
+  .hue-strip-wrap { position: relative; height: 22px; }
+  .hue-strip { width: 100%; height: 100%; border-radius: 11px; cursor: pointer; background: linear-gradient(to right, hsl(0,100%,50%), hsl(30,100%,50%), hsl(60,100%,50%), hsl(90,100%,50%), hsl(120,100%,50%), hsl(150,100%,50%), hsl(180,100%,50%), hsl(210,100%,50%), hsl(240,100%,50%), hsl(270,100%,50%), hsl(300,100%,50%), hsl(330,100%,50%), hsl(360,100%,50%)); user-select: none; }
+  .strip-thumb { position: absolute; top: 50%; transform: translate(-50%,-50%); width: 22px; height: 22px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 1px 8px rgba(0,0,0,0.5); pointer-events: none; }
+
+  .sl-wrap { position: relative; border-radius: 8px; overflow: hidden; line-height: 0; }
+  canvas#sl-canvas { display: block; border-radius: 8px; cursor: crosshair; width: 100%; height: 180px; }
+  .sl-thumb { position: absolute; width: 18px; height: 18px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 1px 6px rgba(0,0,0,0.6); pointer-events: none; transform: translate(-50%,-50%); }
+
+  /* ── RESULT ── */
+  .result-swatches { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
+  .result-swatch { height: 130px; border-radius: 10px; display: flex; flex-direction: column; justify-content: flex-end; padding: 0.75rem; }
+  .result-swatch .lbl { font-size: 0.56rem; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255,255,255,0.45); }
+  .breakdown { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.3rem; display: flex; flex-direction: column; gap: 0.7rem; }
+  .score-big { font-family: 'Fraunces', serif; font-size: 3.2rem; font-weight: 200; letter-spacing: -0.03em; line-height: 1; }
+  .score-sub { font-size: 0.6rem; letter-spacing: 0.12em; color: var(--muted); text-transform: uppercase; }
+  .delta-bar-wrap { width: 100%; height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 0.2rem; }
+  .delta-bar { height: 100%; border-radius: 3px; width: 0%; }
+  .detail-row { display: flex; justify-content: space-between; font-size: 0.6rem; color: var(--muted); }
+  .detail-row span:last-child { color: var(--text); }
+
+  /* ── FINAL ── */
+  .final-title { font-family: 'Fraunces', serif; font-size: 1rem; font-weight: 200; font-style: italic; color: var(--muted); }
+  .final-score { font-family: 'Fraunces', serif; font-size: 5rem; font-weight: 200; letter-spacing: -0.04em; line-height: 1; }
+  .final-sub { font-size: 0.62rem; letter-spacing: 0.1em; color: var(--muted); text-transform: uppercase; }
+  .history-grid { width: 100%; display: grid; grid-template-columns: repeat(5,1fr); gap: 0.5rem; }
+  .hist-item { display: flex; flex-direction: column; gap: 0.3rem; align-items: center; }
+  .hist-swatch { width: 100%; aspect-ratio: 1; border-radius: 6px; }
+  .hist-score { font-size: 0.56rem; color: var(--muted); }
+
+  /* Already played banner */
+  .already-played-banner {
+    width: 100%; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 1rem 1.2rem;
+    display: flex; flex-direction: column; gap: 0.5rem;
+  }
+  .already-played-banner .ap-label { font-size: 0.58rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+  .already-played-banner .ap-score { font-family: 'Fraunces', serif; font-size: 2rem; font-weight: 200; }
+  .already-played-banner .ap-seed { font-size: 0.6rem; color: var(--muted); }
+
+  @keyframes fadeUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="header">
+    <div class="logo">Chrom<em>atic</em></div>
+    <div class="header-right">
+      <div class="round-badge">Round <span id="round-counter">—</span> / 5</div>
+      <button class="share-btn" id="share-btn" onclick="shareGame()">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13"/></svg>
+        Share
+      </button>
+    </div>
+  </div>
+
+  <!-- START -->
+  <div id="start-screen" class="screen active">
+    <div class="tagline">How well do<br>you <em>see</em> colour?</div>
+    <p class="description">A colour shows for 5 seconds. Memorise it. Then mix your best match from memory using the HSL picker.</p>
+    <div class="delta-note">
+      <strong>Scored with ΔE* (Delta E)</strong> — uses CIELAB colour space, the standard for perceptual colour difference. Two colours that look visually similar score well, even if their hex values differ significantly.
+    </div>
+    <div id="already-played-container"></div>
+    <button class="btn" id="start-btn" onclick="startGame()">Begin</button>
+  </div>
+
+  <!-- MEMORISE -->
+  <div id="memorise-screen" class="screen">
+    <div class="round-label" id="memorise-label">Round 1 of 5 — memorise this colour</div>
+    <div class="big-swatch" id="memorise-swatch">
+      <div class="countdown-overlay" id="countdown-num"></div>
+      <div class="swatch-inner-label">Memorise</div>
+      <div class="hidden-msg">Hidden — now mix it from memory</div>
+    </div>
+    <div class="timer-wrap"><div class="timer-bar" id="timer-bar"></div></div>
+  </div>
+
+  <!-- GUESS -->
+  <div id="guess-screen" class="screen">
+    <div class="round-label" id="guess-label">Round 1 of 5 — what was the colour?</div>
+    <div class="swatches-row">
+      <div class="mini-blank"><span>Target hidden</span></div>
+      <div class="mini-swatch" id="guess-mini" style="background:#808080">
+        <div class="swatch-inner-label">Your guess</div>
+      </div>
+    </div>
+    <div class="picker-card">
+      <div class="picker-top">
+        <div class="color-preview-box" id="preview-box" style="background:#808080"></div>
+        <div class="hex-info">
+          <div class="hex-val" id="hex-display">#808080</div>
+          <div class="hsl-val" id="hsl-display">H 0° · S 0% · L 50%</div>
+        </div>
+      </div>
+      <div>
+        <div class="picker-sub-label">Hue</div>
+        <div class="hue-strip-wrap" id="hue-wrap">
+          <div class="hue-strip" id="hue-strip"></div>
+          <div class="strip-thumb" id="hue-thumb" style="left:0;background:hsl(0,100%,50%)"></div>
+        </div>
+      </div>
+      <div>
+        <div class="picker-sub-label">Saturation &amp; Lightness</div>
+        <div class="sl-wrap" id="sl-wrap">
+          <canvas id="sl-canvas"></canvas>
+          <div class="sl-thumb" id="sl-thumb" style="left:0;top:0;border-color:#fff"></div>
+        </div>
+      </div>
+    </div>
+    <button class="btn full" onclick="submitGuess()">Submit Guess</button>
+  </div>
+
+  <!-- RESULT -->
+  <div id="result-screen" class="screen">
+    <div class="round-label" id="result-label">Round 1 result</div>
+    <div class="result-swatches">
+      <div class="result-swatch" id="result-target"><div class="lbl">Target</div></div>
+      <div class="result-swatch" id="result-guess"><div class="lbl">Your guess</div></div>
+    </div>
+    <div class="breakdown">
+      <div>
+        <div class="score-big" id="round-score">—</div>
+        <div class="score-sub">out of 100 · perceptual match</div>
+      </div>
+      <div class="delta-bar-wrap"><div class="delta-bar" id="result-bar"></div></div>
+      <div class="detail-row"><span>ΔE* colour difference</span><span id="de-val">—</span></div>
+      <div class="detail-row"><span>Interpretation</span><span id="de-interp">—</span></div>
+    </div>
+    <button class="btn full" id="next-btn" onclick="nextRound()">Next colour →</button>
+  </div>
+
+  <!-- FINAL -->
+  <div id="final-screen" class="screen">
+    <div class="final-title">Game over</div>
+    <div class="final-score" id="final-score">—</div>
+    <div class="final-sub">total score / 500</div>
+    <div class="history-grid" id="history-grid"></div>
+    <div class="btn-row">
+      <button class="btn ghost" onclick="showScreen('start-screen')">← Back</button>
+      <button class="btn" onclick="startFreshGame()">New game</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// SEEDED PRNG — mulberry32
+// Must be defined before any usage. No `let rng` re-init issues.
+// ═══════════════════════════════════════════════════════════════
+function makePRNG(seed) {
+  let s = seed >>> 0;
+  return function() {
+    s = (s + 0x6D2B79F5) >>> 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function generateSeedStr() {
+  return Math.floor(Math.random() * 0xFFFFFF).toString(16).toUpperCase().padStart(6, '0');
+}
+
+function parseSeedStr(str) {
+  // Returns integer seed from 6-char hex string
+  return parseInt(str, 16);
+}
+
+function getSeedFromHash() {
+  const h = window.location.hash.slice(1);
+  return /^[0-9A-Fa-f]{6}$/.test(h) ? h.toUpperCase() : null;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// COLOR SCIENCE
+// ═══════════════════════════════════════════════════════════════
+function linearize(c) {
+  c /= 255;
+  return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+}
+function rgbToXYZ(r, g, b) {
+  const rl = linearize(r), gl = linearize(g), bl = linearize(b);
+  return {
+    X: rl*0.4124564 + gl*0.3575761 + bl*0.1804375,
+    Y: rl*0.2126729 + gl*0.7151522 + bl*0.0721750,
+    Z: rl*0.0193339 + gl*0.1191920 + bl*0.9503041,
+  };
+}
+function xyzToLab({X,Y,Z}) {
+  const f = t => t > 0.008856 ? Math.cbrt(t) : 7.787*t + 16/116;
+  return {
+    L: 116*f(Y)        - 16,
+    a: 500*(f(X/0.95047) - f(Y)),
+    b: 200*(f(Y)        - f(Z/1.08883)),
+  };
+}
+function rgbToLab(r,g,b) { return xyzToLab(rgbToXYZ(r,g,b)); }
+function deltaE(l1,l2) {
+  return Math.sqrt((l2.L-l1.L)**2 + (l2.a-l1.a)**2 + (l2.b-l1.b)**2);
+}
+function deToScore(de) {
+  return Math.round(100 * Math.exp(-de / 120));
+}
+function interpretDE(de) {
+  if (de < 2)  return 'virtually identical';
+  if (de < 6)  return 'very close match';
+  if (de < 12) return 'close — good eye';
+  if (de < 20) return 'noticeable difference';
+  if (de < 35) return 'clearly different';
+  return 'far apart';
+}
+
+function hslToRgb(h, s, l) {
+  s /= 100; l /= 100;
+  const k = n => (n + h/30) % 12;
+  const a = s * Math.min(l, 1-l);
+  const f = n => l - a * Math.max(-1, Math.min(k(n)-3, Math.min(9-k(n), 1)));
+  return { r: Math.round(f(0)*255), g: Math.round(f(8)*255), b: Math.round(f(4)*255) };
+}
+function toHex({r,g,b}) { return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join(''); }
+function toCss({r,g,b}) { return `rgb(${r},${g},${b})`; }
+function hslCss(h,s,l) { return `hsl(${h},${s}%,${l}%)`; }
+
+// ═══════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════
+const ROUNDS = 5;
+const MEMORISE_MS = 5000;
+const LS_KEY = 'chromatic_results';
+
+const state = {
+  seedStr: '',       // 6-char hex string, e.g. "A3F2C1"
+  rng: null,         // current PRNG function
+  round: 0,
+  targetColor: null,
+  hsl: { h: 0, s: 0, l: 50 },
+  scores: [], targets: [], guesses: [],
+  timerRaf: null,
+};
+
+// ═══════════════════════════════════════════════════════════════
+// LOCAL STORAGE
+// ═══════════════════════════════════════════════════════════════
+function loadResults() {
+  try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; }
+  catch { return {}; }
+}
+
+function saveResult(seedStr, data) {
+  const all = loadResults();
+  all[seedStr] = data;
+  // Keep only last 50 results to avoid bloat
+  const keys = Object.keys(all);
+  if (keys.length > 50) delete all[keys[0]];
+  try { localStorage.setItem(LS_KEY, JSON.stringify(all)); } catch {}
+}
+
+function getResultForSeed(seedStr) {
+  return loadResults()[seedStr] || null;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SEED MANAGEMENT
+// ═══════════════════════════════════════════════════════════════
+function applySeed(seedStr) {
+  state.seedStr = seedStr;
+  state.rng = makePRNG(parseSeedStr(seedStr));
+  window.location.hash = seedStr;
+  checkAlreadyPlayed();
+}
+
+function resetRNG() {
+  // Re-seed from same seed so replaying gives same colours
+  state.rng = makePRNG(parseSeedStr(state.seedStr));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SHARE
+// ═══════════════════════════════════════════════════════════════
+async function shareGame() {
+  const url = window.location.href;
+  const btn = document.getElementById('share-btn');
+
+  try {
+    await navigator.clipboard.writeText(url);
+    btn.textContent = '✓ Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => {
+      btn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13"/></svg> Share`;
+      btn.classList.remove('copied');
+    }, 2000);
+  } catch {
+    // Fallback: select from a temp input
+    const inp = document.createElement('input');
+    inp.value = url;
+    document.body.appendChild(inp);
+    inp.select();
+    document.execCommand('copy');
+    document.body.removeChild(inp);
+    btn.textContent = '✓ Copied!';
+    setTimeout(() => {
+      btn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13"/></svg> Share`;
+    }, 2000);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ALREADY PLAYED CHECK
+// ═══════════════════════════════════════════════════════════════
+function checkAlreadyPlayed() {
+  const container = document.getElementById('already-played-container');
+  const startBtn  = document.getElementById('start-btn');
+  const result = getResultForSeed(state.seedStr);
+
+  if (result) {
+    const total = result.scores.reduce((a,b) => a+b, 0);
+    const col = total/500 > 0.75 ? 'var(--good)' : total/500 > 0.5 ? 'var(--mid)' : 'var(--bad)';
+
+    // Build history swatches
+    const swatchesHtml = result.targets.map((tc, i) => `
+      <div class="hist-item">
+        <div class="hist-swatch" style="background:${toCss(tc)}"></div>
+        <div class="hist-swatch" style="background:${toCss(result.guesses[i])}"></div>
+        <div class="hist-score">${result.scores[i]}</div>
+      </div>`).join('');
+
+    container.innerHTML = `
+      <div class="already-played-banner">
+        <div class="ap-label">You already played this seed</div>
+        <div class="ap-score" style="color:${col}">${total} <span style="font-size:0.9rem;color:var(--muted)">/ 500</span></div>
+        <div class="history-grid" style="margin-top:0.4rem">${swatchesHtml}</div>
+        <div class="ap-seed" style="margin-top:0.4rem">Seed #${state.seedStr}</div>
+      </div>`;
+    startBtn.textContent = 'Play again (same seed)';
+  } else {
+    container.innerHTML = '';
+    startBtn.textContent = 'Begin';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RANDOM COLOR (uses state.rng)
+// ═══════════════════════════════════════════════════════════════
+function randomColor() {
+  let r, g, b;
+  for (let i = 0; i < 2000; i++) {
+    r = Math.floor(state.rng() * 256);
+    g = Math.floor(state.rng() * 256);
+    b = Math.floor(state.rng() * 256);
+    const lab = rgbToLab(r,g,b);
+    const chroma = Math.sqrt(lab.a**2 + lab.b**2);
+    if (lab.L > 25 && lab.L < 78 && chroma > 18) break;
+  }
+  return {r,g,b};
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SCREENS
+// ═══════════════════════════════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GAME FLOW
+// ═══════════════════════════════════════════════════════════════
+function startGame() {
+  resetRNG(); // always replay with same seed from start
+  state.round = 0;
+  state.scores = []; state.targets = []; state.guesses = [];
+  doRound();
+}
+
+function startFreshGame() {
+  applySeed(generateSeedStr());
+  showScreen('start-screen');
+}
+
+function doRound() {
+  state.round++;
+  document.getElementById('round-counter').textContent = state.round;
+
+  const col = randomColor();
+  state.targetColor = col;
+
+  const swatch = document.getElementById('memorise-swatch');
+  swatch.classList.remove('hiding');
+  swatch.style.background = toCss(col);
+  document.getElementById('memorise-label').textContent =
+    `Round ${state.round} of ${ROUNDS} — memorise this colour`;
+
+  showScreen('memorise-screen');
+  runTimer();
+}
+
+function runTimer() {
+  const bar    = document.getElementById('timer-bar');
+  const num    = document.getElementById('countdown-num');
+  const swatch = document.getElementById('memorise-swatch');
+  const start  = performance.now();
+
+  cancelAnimationFrame(state.timerRaf);
+  bar.style.transition = 'none';
+  bar.style.width = '100%';
+  bar.style.background = 'var(--accent)';
+  num.style.opacity = '0';
+
+  function tick(now) {
+    const elapsed = now - start;
+    const pct = Math.max(0, 1 - elapsed / MEMORISE_MS);
+
+    bar.style.width = (pct * 100) + '%';
+    if      (pct < 0.3) bar.style.background = 'var(--bad)';
+    else if (pct < 0.6) bar.style.background = 'var(--mid)';
+
+    const remaining = Math.ceil((MEMORISE_MS - elapsed) / 1000);
+    if (remaining <= 3 && remaining > 0) {
+      num.textContent = remaining;
+      num.style.opacity = '1';
+    } else {
+      num.style.opacity = '0';
+    }
+
+    if (elapsed >= MEMORISE_MS) {
+      num.style.opacity = '0';
+      swatch.style.background = '';
+      swatch.classList.add('hiding');
+      setTimeout(showGuess, 500);
+      return;
+    }
+    state.timerRaf = requestAnimationFrame(tick);
+  }
+  state.timerRaf = requestAnimationFrame(tick);
+}
+
+function showGuess() {
+  state.hsl = { h: 0, s: 0, l: 50 };
+  document.getElementById('guess-label').textContent =
+    `Round ${state.round} of ${ROUNDS} — what was the colour?`;
+  drawSLCanvas();
+  updatePickerUI();
+  showScreen('guess-screen');
+}
+
+function submitGuess() {
+  const gc = hslToRgb(state.hsl.h, state.hsl.s, state.hsl.l);
+  const tc = state.targetColor;
+  const de = deltaE(rgbToLab(tc.r,tc.g,tc.b), rgbToLab(gc.r,gc.g,gc.b));
+  const score = deToScore(de);
+
+  state.scores.push(score);
+  state.targets.push({...tc});
+  state.guesses.push({...gc});
+
+  showResult(tc, gc, de, score);
+}
+
+function showResult(tc, gc, de, score) {
+  document.getElementById('result-label').textContent = `Round ${state.round} result`;
+  document.getElementById('result-target').style.background = toCss(tc);
+  document.getElementById('result-guess').style.background  = toCss(gc);
+  document.getElementById('round-score').textContent = score;
+  document.getElementById('de-val').textContent    = de.toFixed(2);
+  document.getElementById('de-interp').textContent = interpretDE(de);
+
+  const col = score > 75 ? 'var(--good)' : score > 45 ? 'var(--mid)' : 'var(--bad)';
+  document.getElementById('round-score').style.color = col;
+  const bar = document.getElementById('result-bar');
+  bar.style.background = col;
+  bar.style.transition = 'none';
+  bar.style.width = '0%';
+
+  document.getElementById('next-btn').textContent =
+    state.round >= ROUNDS ? 'See final score →' : 'Next colour →';
+
+  showScreen('result-screen');
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    bar.style.transition = 'width 1s cubic-bezier(0.16,1,0.3,1)';
+    bar.style.width = score + '%';
+  }));
+}
+
+function nextRound() {
+  if (state.round >= ROUNDS) {
+    showFinal();
+  } else {
+    doRound();
+  }
+}
+
+function showFinal() {
+  // Save to localStorage
+  saveResult(state.seedStr, {
+    scores: state.scores,
+    targets: state.targets,
+    guesses: state.guesses,
+  });
+
+  const total = state.scores.reduce((a,b) => a+b, 0);
+  const el = document.getElementById('final-score');
+  el.textContent = total;
+  el.style.color = total/500 > 0.75 ? 'var(--good)' : total/500 > 0.5 ? 'var(--mid)' : 'var(--bad)';
+
+  const grid = document.getElementById('history-grid');
+  grid.innerHTML = '';
+  state.targets.forEach((tc, i) => {
+    const d = document.createElement('div');
+    d.className = 'hist-item';
+    d.innerHTML = `
+      <div class="hist-swatch" style="background:${toCss(tc)}"></div>
+      <div class="hist-swatch" style="background:${toCss(state.guesses[i])}"></div>
+      <div class="hist-score">${state.scores[i]}</div>`;
+    grid.appendChild(d);
+  });
+
+  showScreen('final-screen');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HSL PICKER
+// ═══════════════════════════════════════════════════════════════
+const slCanvas = document.getElementById('sl-canvas');
+const slCtx    = slCanvas.getContext('2d');
+
+function drawSLCanvas() {
+  const w = slCanvas.parentElement.offsetWidth || 480;
+  const h = 180;
+  slCanvas.width  = w;
+  slCanvas.height = h;
+
+  const hue = state.hsl.h;
+  const satGrad = slCtx.createLinearGradient(0,0,w,0);
+  satGrad.addColorStop(0, `hsl(${hue},0%,50%)`);
+  satGrad.addColorStop(1, `hsl(${hue},100%,50%)`);
+  slCtx.fillStyle = satGrad;
+  slCtx.fillRect(0,0,w,h);
+
+  const wGrad = slCtx.createLinearGradient(0,0,0,h);
+  wGrad.addColorStop(0,   'rgba(255,255,255,1)');
+  wGrad.addColorStop(0.5, 'rgba(255,255,255,0)');
+  slCtx.fillStyle = wGrad;
+  slCtx.fillRect(0,0,w,h);
+
+  const bGrad = slCtx.createLinearGradient(0,0,0,h);
+  bGrad.addColorStop(0.5, 'rgba(0,0,0,0)');
+  bGrad.addColorStop(1,   'rgba(0,0,0,1)');
+  slCtx.fillStyle = bGrad;
+  slCtx.fillRect(0,0,w,h);
+}
+
+function updatePickerUI() {
+  const {h,s,l} = state.hsl;
+  const rgb = hslToRgb(h,s,l);
+
+  document.getElementById('preview-box').style.background = hslCss(h,s,l);
+  document.getElementById('hex-display').textContent = toHex(rgb).toUpperCase();
+  document.getElementById('hsl-display').textContent = `H ${h}° · S ${s}% · L ${l}%`;
+
+  const mini = document.getElementById('guess-mini');
+  mini.style.background = hslCss(h,s,l);
+
+  const hueWrap = document.getElementById('hue-wrap');
+  const hueThumb = document.getElementById('hue-thumb');
+  hueThumb.style.left = ((h/360) * hueWrap.offsetWidth) + 'px';
+  hueThumb.style.background = `hsl(${h},100%,50%)`;
+
+  const cw = slCanvas.width, ch = slCanvas.height;
+  const slThumb = document.getElementById('sl-thumb');
+  slThumb.style.left = ((s/100)*cw) + 'px';
+  slThumb.style.top  = ((1-l/100)*ch) + 'px';
+  slThumb.style.borderColor = l > 55 ? '#333' : '#fff';
+}
+
+// Hue strip
+(function() {
+  const wrap = document.getElementById('hue-wrap');
+  function move(e) {
+    e.preventDefault();
+    const rect = wrap.getBoundingClientRect();
+    const cx = e.touches ? e.touches[0].clientX : e.clientX;
+    const x = Math.max(0, Math.min(cx - rect.left, rect.width));
+    state.hsl.h = Math.round((x / rect.width) * 360);
+    drawSLCanvas();
+    updatePickerUI();
+  }
+  wrap.addEventListener('mousedown', e => {
+    move(e);
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', () => document.removeEventListener('mousemove', move), {once:true});
+  });
+  wrap.addEventListener('touchstart', e => {
+    move(e);
+    document.addEventListener('touchmove', move, {passive:false});
+    document.addEventListener('touchend', () => document.removeEventListener('touchmove', move), {once:true});
+  });
+})();
+
+// SL canvas
+(function() {
+  function move(e) {
+    e.preventDefault();
+    const rect = slCanvas.getBoundingClientRect();
+    const cx = e.touches ? e.touches[0].clientX : e.clientX;
+    const cy = e.touches ? e.touches[0].clientY : e.clientY;
+    const x = Math.max(0, Math.min(cx - rect.left, rect.width));
+    const y = Math.max(0, Math.min(cy - rect.top,  rect.height));
+    state.hsl.s = Math.round((x / rect.width) * 100);
+    state.hsl.l = Math.round((1 - y / rect.height) * 100);
+    updatePickerUI();
+  }
+  slCanvas.addEventListener('mousedown', e => {
+    move(e);
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', () => document.removeEventListener('mousemove', move), {once:true});
+  });
+  slCanvas.addEventListener('touchstart', e => {
+    move(e);
+    document.addEventListener('touchmove', move, {passive:false});
+    document.addEventListener('touchend', () => document.removeEventListener('touchmove', move), {once:true});
+  });
+})();
+
+window.addEventListener('resize', () => {
+  if (document.getElementById('guess-screen').classList.contains('active')) {
+    drawSLCanvas(); updatePickerUI();
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// INIT — runs after all functions are defined
+// ═══════════════════════════════════════════════════════════════
+(function init() {
+  const fromHash = getSeedFromHash();
+  applySeed(fromHash || generateSeedStr());
+})();
+</script>
+</body>
+</html>
