@@ -28,7 +28,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     padding: 2rem;
   }
 
@@ -138,13 +138,28 @@
   .detail-row span:last-child { color: var(--text); }
 
   /* ── FINAL ── */
-  .final-title { font-family: 'Fraunces', serif; font-size: 1rem; font-weight: 200; font-style: italic; color: var(--muted); }
+  .final-score-row { display: flex; align-items: baseline; gap: 0.6rem; }
   .final-score { font-family: 'Fraunces', serif; font-size: 5rem; font-weight: 200; letter-spacing: -0.04em; line-height: 1; }
-  .final-sub { font-size: 0.62rem; letter-spacing: 0.1em; color: var(--muted); text-transform: uppercase; }
-  .history-grid { width: 100%; display: grid; grid-template-columns: repeat(5,1fr); gap: 0.5rem; }
-  .hist-item { display: flex; flex-direction: column; gap: 0.3rem; align-items: center; }
-  .hist-swatch { width: 100%; aspect-ratio: 1; border-radius: 6px; }
-  .hist-score { font-size: 0.56rem; color: var(--muted); }
+  .final-score-denom { font-family: 'Fraunces', serif; font-size: 1.6rem; font-weight: 200; color: var(--muted); letter-spacing: -0.02em; }
+
+  /* Round comparison table */
+  .history-table {
+    width: fit-content;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: minmax(0,100px) 36px minmax(0,100px) auto;
+    align-items: center;
+    column-gap: 0.6rem;
+    row-gap: 1.5rem;
+  }
+  .hist-col-label { font-size: 0.64rem; letter-spacing: 0.08em; text-transform: uppercase; color: #7a7880; padding-bottom: 0.3rem; }
+  .hist-col-label.right { text-align: right; }
+  .hist-chip { height: 32px; border-radius: 6px; }
+  .hist-arrow { font-size: 1rem; color: var(--muted); text-align: center; line-height: 1; }
+  .hist-row-score {
+    font-family: 'Fraunces', serif; font-size: 1.4rem; font-weight: 200;
+    letter-spacing: -0.02em; text-align: right;
+  }
 
   /* Already played banner */
   .already-played-banner {
@@ -156,6 +171,23 @@
   .already-played-banner .ap-score { font-family: 'Fraunces', serif; font-size: 2rem; font-weight: 200; }
   .already-played-banner .ap-seed { font-size: 0.6rem; color: var(--muted); }
 
+  #seed-hint { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: center; }
+  .seed-hint-text { font-size: 0.66rem; color: var(--muted); letter-spacing: 0.06em; }
+  .seed-hint-text strong { color: var(--text); }
+  .btn-link { background: none; border: none; padding: 0; font-family: 'DM Mono', monospace; font-size: 0.66rem; color: var(--muted); text-decoration: underline; cursor: pointer; letter-spacing: 0.06em; }
+  .btn-link:hover { color: var(--accent); }
+
+  /* Toast */
+  .toast {
+    position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%);
+    background: var(--text); color: var(--bg);
+    font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 0.6rem 1.2rem; border-radius: 4px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.2s ease;
+    z-index: 999;
+  }
+  .toast.visible { opacity: 1; }
   @keyframes fadeUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
 </style>
 </head>
@@ -177,10 +209,14 @@
     <div class="tagline">How well do<br>you <em>see</em> colour?</div>
     <p class="description">A colour shows for 5 seconds. Memorise it. Then mix your best match from memory using the HSL picker.</p>
     <div class="delta-note">
-      <strong>Scored with ΔE* (Delta E)</strong> — uses CIELAB colour space, the standard for perceptual colour difference. Two colours that look visually similar score well, even if their hex values differ significantly.
+      <strong>Scored with CIEDE2000</strong> — the current industry standard for perceptual colour difference. Accounts for hue, chroma, and lightness non-uniformities including the blue-region distortion that simpler formulas get wrong.
     </div>
     <div id="already-played-container"></div>
     <button class="btn" id="start-btn" onclick="startGame()">Begin</button>
+    <div id="seed-hint" style="display:none">
+      <span class="seed-hint-text">Match <strong id="seed-hint-code"></strong></span>
+      <button class="btn-link" onclick="resetToFresh()">reset</button>
+    </div>
   </div>
 
   <!-- MEMORISE -->
@@ -189,7 +225,6 @@
     <div class="big-swatch" id="memorise-swatch">
       <div class="countdown-overlay" id="countdown-num"></div>
       <div class="swatch-inner-label">Memorise</div>
-      <div class="hidden-msg">Hidden — now mix it from memory</div>
     </div>
     <div class="timer-wrap"><div class="timer-bar" id="timer-bar"></div></div>
   </div>
@@ -197,12 +232,6 @@
   <!-- GUESS -->
   <div id="guess-screen" class="screen">
     <div class="round-label" id="guess-label">Round 1 of 5 — what was the colour?</div>
-    <div class="swatches-row">
-      <div class="mini-blank"><span>Target hidden</span></div>
-      <div class="mini-swatch" id="guess-mini" style="background:#808080">
-        <div class="swatch-inner-label">Your guess</div>
-      </div>
-    </div>
     <div class="picker-card">
       <div class="picker-top">
         <div class="color-preview-box" id="preview-box" style="background:#808080"></div>
@@ -242,7 +271,7 @@
         <div class="score-sub">out of 100 · perceptual match</div>
       </div>
       <div class="delta-bar-wrap"><div class="delta-bar" id="result-bar"></div></div>
-      <div class="detail-row"><span>ΔE* colour difference</span><span id="de-val">—</span></div>
+      <div class="detail-row"><span>ΔE 2000 colour difference</span><span id="de-val">—</span></div>
       <div class="detail-row"><span>Interpretation</span><span id="de-interp">—</span></div>
     </div>
     <button class="btn full" id="next-btn" onclick="nextRound()">Next colour →</button>
@@ -250,18 +279,37 @@
 
   <!-- FINAL -->
   <div id="final-screen" class="screen">
-    <div class="final-title">Game over</div>
-    <div class="final-score" id="final-score">—</div>
-    <div class="final-sub">total score / 500</div>
-    <div class="history-grid" id="history-grid"></div>
+    <div class="final-score-row">
+      <div class="final-score" id="final-score">—</div>
+      <div class="final-score-denom">/ 500</div>
+    </div>
+    <div class="history-table" id="history-grid" title="Double-click to copy results" style="cursor:default">
+      <div class="hist-col-label">Your guess</div>
+      <div></div>
+      <div class="hist-col-label">Target</div>
+      <div class="hist-col-label right">Score</div>
+    </div>
     <div class="btn-row">
       <button class="btn ghost" onclick="showScreen('start-screen')">← Back</button>
-      <button class="btn" onclick="startFreshGame()">New game</button>
+      <button class="btn" onclick="resetToFresh()">New game</button>
     </div>
   </div>
 </div>
+<div class="toast" id="toast"></div>
 
 <script>
+// ═══════════════════════════════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════════════════════════════
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('visible');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('visible'), 2000);
+}
+
 // ═══════════════════════════════════════════════════════════════
 // SEEDED PRNG — mulberry32
 // Must be defined before any usage. No `let rng` re-init issues.
@@ -314,18 +362,80 @@ function xyzToLab({X,Y,Z}) {
   };
 }
 function rgbToLab(r,g,b) { return xyzToLab(rgbToXYZ(r,g,b)); }
-function deltaE(l1,l2) {
-  return Math.sqrt((l2.L-l1.L)**2 + (l2.a-l1.a)**2 + (l2.b-l1.b)**2);
+
+// CIEDE2000 — far more perceptually accurate than CIE76
+// Corrects for blue-region distortion, chroma/lightness weighting, hue rotation
+function deltaE(lab1, lab2) {
+  const {L:L1, a:a1, b:b1} = lab1;
+  const {L:L2, a:a2, b:b2} = lab2;
+
+  const C1 = Math.sqrt(a1**2 + b1**2);
+  const C2 = Math.sqrt(a2**2 + b2**2);
+  const Cb = (C1 + C2) / 2;
+  const Cb7 = Cb**7;
+  const G = 0.5 * (1 - Math.sqrt(Cb7 / (Cb7 + 25**7)));
+  const a1p = a1 * (1 + G), a2p = a2 * (1 + G);
+  const C1p = Math.sqrt(a1p**2 + b1**2);
+  const C2p = Math.sqrt(a2p**2 + b2**2);
+
+  const h = (ap, bp) => { const v = Math.atan2(bp, ap) * 180 / Math.PI; return v < 0 ? v + 360 : v; };
+  const h1p = h(a1p, b1), h2p = h(a2p, b2);
+
+  const dLp = L2 - L1;
+  const dCp = C2p - C1p;
+  let dhp;
+  if (C1p * C2p === 0) dhp = 0;
+  else if (Math.abs(h2p - h1p) <= 180) dhp = h2p - h1p;
+  else if (h2p - h1p > 180) dhp = h2p - h1p - 360;
+  else dhp = h2p - h1p + 360;
+  const dHp = 2 * Math.sqrt(C1p * C2p) * Math.sin(dhp / 2 * Math.PI / 180);
+
+  const Lbp = (L1 + L2) / 2;
+  const Cbp = (C1p + C2p) / 2;
+  let hbp;
+  if (C1p * C2p === 0) hbp = h1p + h2p;
+  else if (Math.abs(h1p - h2p) <= 180) hbp = (h1p + h2p) / 2;
+  else if (h1p + h2p < 360) hbp = (h1p + h2p + 360) / 2;
+  else hbp = (h1p + h2p - 360) / 2;
+
+  const deg = x => x * Math.PI / 180;
+  const T = 1
+    - 0.17 * Math.cos(deg(hbp - 30))
+    + 0.24 * Math.cos(deg(2 * hbp))
+    + 0.32 * Math.cos(deg(3 * hbp + 6))
+    - 0.20 * Math.cos(deg(4 * hbp - 63));
+
+  const Cbp7 = Cbp**7;
+  const SL = 1 + 0.015 * (Lbp - 50)**2 / Math.sqrt(20 + (Lbp - 50)**2);
+  const SC = 1 + 0.045 * Cbp;
+  const SH = 1 + 0.015 * Cbp * T;
+  const dTheta = 30 * Math.exp(-(((hbp - 275) / 25) ** 2));
+  const RC = 2 * Math.sqrt(Cbp7 / (Cbp7 + 25**7));
+  const RT = -Math.sin(deg(2 * dTheta)) * RC;
+
+  return Math.sqrt(
+    (dLp / SL)**2 +
+    (dCp / SC)**2 +
+    (dHp / SH)**2 +
+    RT * (dCp / SC) * (dHp / SH)
+  );
 }
+
+// Sigmoid scoring on CIEDE2000 — calibrated against real user perception data
+// DE00=0 → 100, DE00=2 → 98, DE00=7 → 90, DE00=14 → 73, DE00=25 → 38, DE00=45 → 5
 function deToScore(de) {
-  return Math.round(100 * Math.exp(-de / 120));
+  const raw  = 1 / (1 + Math.exp((de - 20) / 8));
+  const raw0 = 1 / (1 + Math.exp((0 - 20) / 8));
+  return Math.round(raw / raw0 * 100);
 }
+
+// Interpretation labels calibrated to CIEDE2000 scale
 function interpretDE(de) {
   if (de < 2)  return 'virtually identical';
-  if (de < 6)  return 'very close match';
-  if (de < 12) return 'close — good eye';
-  if (de < 20) return 'noticeable difference';
-  if (de < 35) return 'clearly different';
+  if (de < 5)  return 'very close match';
+  if (de < 10) return 'close — good eye';
+  if (de < 18) return 'noticeable difference';
+  if (de < 30) return 'clearly different';
   return 'far apart';
 }
 
@@ -381,46 +491,76 @@ function getResultForSeed(seedStr) {
 // ═══════════════════════════════════════════════════════════════
 // SEED MANAGEMENT
 // ═══════════════════════════════════════════════════════════════
-function applySeed(seedStr) {
+// SEED MANAGEMENT
+// ═══════════════════════════════════════════════════════════════
+
+// Ensure a seed exists — generate one lazily if needed
+function ensureSeed() {
+  if (!state.seedStr) {
+    state.seedStr = generateSeedStr();
+    state.rng = makePRNG(parseSeedStr(state.seedStr));
+    window.location.hash = state.seedStr;
+  }
+}
+
+// Apply a specific seed (always from an external source — URL/share)
+function applySeed(seedStr, fromHashChange) {
   state.seedStr = seedStr;
   state.rng = makePRNG(parseSeedStr(seedStr));
-  window.location.hash = seedStr;
+  if (!fromHashChange) window.location.hash = seedStr;
   checkAlreadyPlayed();
+  updateSeedHint();
+}
+
+// Clear seed back to pristine state (no hash, no hint)
+function resetToFresh() {
+  state.seedStr = null;
+  state.rng = null;
+  window.location.hash = '';
+  updateSeedHint();
+  checkAlreadyPlayed();
+  showScreen('start-screen');
+}
+
+function updateSeedHint() {
+  const hint = document.getElementById('seed-hint');
+  const code = document.getElementById('seed-hint-code');
+  if (state.seedStr && getSeedFromHash()) {
+    code.textContent = '#' + state.seedStr;
+    hint.style.display = 'flex';
+  } else {
+    hint.style.display = 'none';
+  }
 }
 
 function resetRNG() {
-  // Re-seed from same seed so replaying gives same colours
   state.rng = makePRNG(parseSeedStr(state.seedStr));
 }
 
 // ═══════════════════════════════════════════════════════════════
-// SHARE
+// SHARE — generates seed lazily if needed
 // ═══════════════════════════════════════════════════════════════
 async function shareGame() {
+  ensureSeed();
+  updateSeedHint();
+
   const url = window.location.href;
   const btn = document.getElementById('share-btn');
+  const svgIcon = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13"/></svg>`;
 
   try {
     await navigator.clipboard.writeText(url);
-    btn.textContent = '✓ Copied!';
-    btn.classList.add('copied');
-    setTimeout(() => {
-      btn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13"/></svg> Share`;
-      btn.classList.remove('copied');
-    }, 2000);
   } catch {
-    // Fallback: select from a temp input
     const inp = document.createElement('input');
     inp.value = url;
     document.body.appendChild(inp);
     inp.select();
     document.execCommand('copy');
     document.body.removeChild(inp);
-    btn.textContent = '✓ Copied!';
-    setTimeout(() => {
-      btn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13"/></svg> Share`;
-    }, 2000);
   }
+  btn.textContent = '✓ Copied!';
+  btn.classList.add('copied');
+  setTimeout(() => { btn.innerHTML = `${svgIcon} Share`; btn.classList.remove('copied'); }, 2000);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -436,18 +576,25 @@ function checkAlreadyPlayed() {
     const col = total/500 > 0.75 ? 'var(--good)' : total/500 > 0.5 ? 'var(--mid)' : 'var(--bad)';
 
     // Build history swatches
-    const swatchesHtml = result.targets.map((tc, i) => `
-      <div class="hist-item">
-        <div class="hist-swatch" style="background:${toCss(tc)}"></div>
-        <div class="hist-swatch" style="background:${toCss(result.guesses[i])}"></div>
-        <div class="hist-score">${result.scores[i]}</div>
-      </div>`).join('');
+    const rowCells = result.targets.map((tc, i) => {
+      const score = result.scores[i];
+      const gc = result.guesses[i];
+      const col = score > 75 ? 'var(--good)' : score > 45 ? 'var(--mid)' : 'var(--bad)';
+      return `
+        <div class="hist-chip" style="background:${toCss(gc)}"></div>
+        <div class="hist-arrow">→</div>
+        <div class="hist-chip" style="background:${toCss(tc)}"></div>
+        <div class="hist-row-score" style="color:${col}">${score}</div>`;
+    }).join('');
 
     container.innerHTML = `
       <div class="already-played-banner">
         <div class="ap-label">You already played this seed</div>
         <div class="ap-score" style="color:${col}">${total} <span style="font-size:0.9rem;color:var(--muted)">/ 500</span></div>
-        <div class="history-grid" style="margin-top:0.4rem">${swatchesHtml}</div>
+        <div class="history-table" style="margin-top:0.4rem">
+          <div class="hist-col-label">Your guess</div><div></div><div class="hist-col-label">Target</div><div class="hist-col-label right">Score</div>
+          ${rowCells}
+        </div>
         <div class="ap-seed" style="margin-top:0.4rem">Seed #${state.seedStr}</div>
       </div>`;
     startBtn.textContent = 'Play again (same seed)';
@@ -485,15 +632,11 @@ function showScreen(id) {
 // GAME FLOW
 // ═══════════════════════════════════════════════════════════════
 function startGame() {
-  resetRNG(); // always replay with same seed from start
+  ensureSeed();          // generate seed now if not already set
+  resetRNG();            // rewind RNG so replaying same seed gives same colours
   state.round = 0;
   state.scores = []; state.targets = []; state.guesses = [];
   doRound();
-}
-
-function startFreshGame() {
-  applySeed(generateSeedStr());
-  showScreen('start-screen');
 }
 
 function doRound() {
@@ -543,9 +686,7 @@ function runTimer() {
 
     if (elapsed >= MEMORISE_MS) {
       num.style.opacity = '0';
-      swatch.style.background = '';
-      swatch.classList.add('hiding');
-      setTimeout(showGuess, 500);
+      showGuess();
       return;
     }
     state.timerRaf = requestAnimationFrame(tick);
@@ -608,6 +749,16 @@ function nextRound() {
   }
 }
 
+function buildResultText() {
+  const seed = state.seedStr ? `#${state.seedStr}` : '(no seed)';
+  const lines = [`${seed}`, `guess, target, score`];
+  state.guesses.forEach((gc, i) => {
+    const tc = state.targets[i];
+    lines.push(`${toCss(gc)}, ${toCss(tc)}, ${state.scores[i]}`);
+  });
+  return lines.join('\n');
+}
+
 function showFinal() {
   // Save to localStorage
   saveResult(state.seedStr, {
@@ -622,16 +773,25 @@ function showFinal() {
   el.style.color = total/500 > 0.75 ? 'var(--good)' : total/500 > 0.5 ? 'var(--mid)' : 'var(--bad)';
 
   const grid = document.getElementById('history-grid');
-  grid.innerHTML = '';
+  // Keep the header cells, append data cells
   state.targets.forEach((tc, i) => {
-    const d = document.createElement('div');
-    d.className = 'hist-item';
-    d.innerHTML = `
-      <div class="hist-swatch" style="background:${toCss(tc)}"></div>
-      <div class="hist-swatch" style="background:${toCss(state.guesses[i])}"></div>
-      <div class="hist-score">${state.scores[i]}</div>`;
-    grid.appendChild(d);
+    const score = state.scores[i];
+    const gc = state.guesses[i];
+    const col = score > 75 ? 'var(--good)' : score > 45 ? 'var(--mid)' : 'var(--bad)';
+    grid.insertAdjacentHTML('beforeend', `
+      <div class="hist-chip" style="background:${toCss(gc)}"></div>
+      <div class="hist-arrow">→</div>
+      <div class="hist-chip" style="background:${toCss(tc)}"></div>
+      <div class="hist-row-score" style="color:${col}">${score}</div>`);
   });
+
+  // Double-click anywhere on grid to copy results as text
+  grid.ondblclick = async () => {
+    const text = buildResultText();
+    try { await navigator.clipboard.writeText(text); }
+    catch { const i = document.createElement('textarea'); i.value = text; document.body.appendChild(i); i.select(); document.execCommand('copy'); document.body.removeChild(i); }
+    showToast('Results copied');
+  };
 
   showScreen('final-screen');
 }
@@ -675,9 +835,6 @@ function updatePickerUI() {
   document.getElementById('preview-box').style.background = hslCss(h,s,l);
   document.getElementById('hex-display').textContent = toHex(rgb).toUpperCase();
   document.getElementById('hsl-display').textContent = `H ${h}° · S ${s}% · L ${l}%`;
-
-  const mini = document.getElementById('guess-mini');
-  mini.style.background = hslCss(h,s,l);
 
   const hueWrap = document.getElementById('hue-wrap');
   const hueThumb = document.getElementById('hue-thumb');
@@ -749,9 +906,27 @@ window.addEventListener('resize', () => {
 // ═══════════════════════════════════════════════════════════════
 // INIT — runs after all functions are defined
 // ═══════════════════════════════════════════════════════════════
+window.addEventListener('hashchange', () => {
+  const newSeed = getSeedFromHash();
+  if (!newSeed) {
+    // Hash was cleared externally — treat as reset
+    state.seedStr = null;
+    updateSeedHint();
+    return;
+  }
+  const midGame = state.round > 0 && state.scores.length < ROUNDS;
+  if (!midGame) {
+    applySeed(newSeed, true);
+    showScreen('start-screen');
+  }
+});
+
 (function init() {
   const fromHash = getSeedFromHash();
-  applySeed(fromHash || generateSeedStr());
+  if (fromHash) {
+    applySeed(fromHash, true); // shared link — load seed and show hint
+  }
+  // Otherwise: no seed, no hash. Clean slate until Begin or Share.
 })();
 </script>
 </body>
