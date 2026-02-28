@@ -207,9 +207,9 @@
   <!-- START -->
   <div id="start-screen" class="screen active">
     <div class="tagline">How well do<br>you <em>see</em> colour?</div>
-    <p class="description">A colour shows for 5 seconds. Memorise it. Then mix your best match from memory using the HSL picker.</p>
+    <p class="description">A colour appears for 5 seconds. Memorise it, then mix your closest match from memory.</p>
     <div class="delta-note">
-      <strong>Scored with CIEDE2000</strong> — the current industry standard for perceptual colour difference. Accounts for hue, chroma, and lightness non-uniformities including the blue-region distortion that simpler formulas get wrong.
+      Scored using <strong>CIEDE2000</strong> — a perceptual colour difference formula that matches how the human eye actually sees colour.
     </div>
     <div id="already-played-container"></div>
     <button class="btn" id="start-btn" onclick="startGame()">Begin</button>
